@@ -1,14 +1,17 @@
 function Chart(opt) {
   const _this = this;
-  const THEME = opt.theme || 'light';
-  const UTC_DAY = 1000 * 60 * 60 * 24;
 
+  const THEME = opt.theme || 'light';
+  const PERIOD = opt.period || 1000 * 60 * 60 * 24;
+  const POINTS = opt.points || 6;
   const COLORS = {
     AXIS: '#ecf0f3',
     BOX_BRDR: '#ddeaf3',
     BOX: '#f5f9fb',
-    WHITE: '#ffffff'
+    WHITE: '#ffffff',
+    FONT: '#a5b0b7'
   };
+  const FF = opt.fontFamaly || 'Roboto-thin';
   const el = opt.elem;
   
   const { c, w, h } = setUpCnvs(document.createElement('canvas'), opt.width, opt.height);
@@ -18,15 +21,16 @@ function Chart(opt) {
     x: 0,
     y: h * 0.1,
     w: w,
-    h: h * 0.55,
-    lw: 2
+    h: h * 0.5,
+    lw: 2,
+    clw: 1
   };
 
   const minChartProps = {
     x: 0,
     y: h * 0.65,
     w: w,
-    h: h * 0.06,
+    h: h * 0.065,
     boxW: w * 0.25,
     boxH: h * 0.0565,
     xBox: w * 0.9925 - w * 0.25,
@@ -34,7 +38,7 @@ function Chart(opt) {
     lw: 1
   };
 
-  let xl, yl, xlc, ylc, indxs;
+  let xl, yl;
 
   const actvz = {
     s: null,
@@ -58,14 +62,13 @@ function Chart(opt) {
     yl  = findMaxMin(mergedCols.y, actvz);
 
     drawMinChart(_this.data, ctx, minChartProps, xl, yl, COLORS);
-    drawChartCoordinates(ctx, chartProps, COLORS.AXIS);
   }
 
   function drawMinChart(data, c, p, xl, yl, clrs, d = {}, m) {
     clearChart(c, 0, p.y, p.w, p.y + p.h);
     drawMovingSquire(c, p, clrs, d, m);
-    drawMiniature(data, c, w, h, p, xl, yl, UTC_DAY);
-    drawMinChartCoordinates(c, p, clrs.AXIS);
+    drawMiniature(data, c, w, h, p, xl, yl, PERIOD);
+    drawMinChartCoordinates(c, p, COLORS.AXIS, xl, PERIOD);
   }
 
   function bindEvents(c, p, clrs) {
@@ -201,7 +204,7 @@ function Chart(opt) {
     drawRect(c, x - 5, y - 1, bw + 10, bh + 2, clrs.BOX_BRDR);
     drawRect(c, x, y, bw, bh, clrs.WHITE);
 
-    drawMainChart(_this.data, ctx, chartProps, actvz, UTC_DAY);
+    drawMainChart(_this.data, ctx, chartProps, actvz, PERIOD, COLORS);
   }
 
   function drawRect(c, x, y, w, h, clr) {
@@ -210,23 +213,25 @@ function Chart(opt) {
     c.fillRect(x, y, w, h);
   }
 
-  function drawMainChart(data, c, p, actvz, per) {
+  function drawMainChart(data, c, p, actvz, per, COLORS) {
     const colors = Object.values(data.colors);
-    console.log(colors);
-    indxs = findIndexes(p.w, actvz);
+    const ymin = p.h * 0.95;
+    const yc = p.y + p.h + (p.y + p.h) * 0.06
+    
+    const indxs = findIndexes(p.w, actvz);
     const aCut = getArrayCut(data.columns, indxs);
-    console.log('acut', aCut);
     const mergedCols = mergeCols(aCut);
+    const xlc = findMaxMin(mergedCols.x, actvz);
+    const ylc  = findMaxMin(mergedCols.y, actvz);
+    const { stX } = getSteps(p.w, p.h * 0.8, xlc, ylc, per);
 
-    xlc = findMaxMin(mergedCols.x, actvz);
-    ylc  = findMaxMin(mergedCols.y, actvz);
+    clearChart(c, p.x, 0, p.w, yc);
+    drawChartCoordinates(ctx, p, COLORS.AXIS, xlc, ylc);
 
-    const { stX, stY } = getSteps(p.w, p.h * 0.9, xlc, ylc, per);
-    clearChart(c, p.x, 0, p.w, p.y + p.h);
     for(let i = aCut.length - 1; i > 0; i--) {
       c.beginPath();
-      for (let j = 0, x = p.x; j < aCut[i].length; j++, x += stX) {
-        const y = p.y + p.h - aCut[i][j] * stY;
+      for (let j = 1, x = p.x; j < aCut[i].length; j++, x += stX) {
+        const y = p.y + ymin  * ylc.min / aCut[i][j];
         if (j === 1) {
           c.moveTo(x, y);
         } else {
@@ -237,7 +242,7 @@ function Chart(opt) {
       c.lineWidth = p.lw;
       c.stroke();
     }
-    console.log(aCut);
+
   }
 
   function drawMiniature(chart, c, w, h, p, xl, yl, per) {
@@ -248,7 +253,7 @@ function Chart(opt) {
     for (let i = cols.length - 1; i > 0; i--) {
       c.beginPath();
       for (let j = 1, x = p.x; j < cols[i].length; j++, x += stX) {
-        const y = h * 0.71 - cols[i][j] * stY;
+        const y = (p.y + p.h) - cols[i][j] * stY;
         if (j === 1) {
           c.moveTo(x, y);
         } else {
@@ -261,23 +266,80 @@ function Chart(opt) {
     }
   }
 
-  function drawChartCoordinates(c, p, clr) {
+  function drawChartCoordinates(c, p, clr, xlc, ylc) {
+    const y = p.y + p.h;
     c.beginPath();
-    c.moveTo(p.x, p.y + p.h);
-    c.lineTo(p.w, p.y + p.h);
+    c.moveTo(p.x, y);
+    c.lineTo(p.w, y);
+    c.strokeStyle = clr;
+    c.lineWidth = p.clw;
+    c.stroke();
+    c.closePath();
+
+    dXC(c, p, xlc, getPeriodUTC(xlc));
+    dYC(c, p, ylc, getYCPer(p, ylc));
+  }
+
+  function drawMinChartCoordinates(c, p, clr) {
+    const y = p.y + p.h;
+    c.beginPath();
+    c.moveTo(p.x, p.y);
+    c.lineTo(p.x, y);
+    c.lineTo(p.w, y);
     c.strokeStyle = clr;
     c.lineWidth = p.lw;
     c.stroke();
   }
 
-  function drawMinChartCoordinates(c, p, clr) {
-    c.beginPath();
-    c.moveTo(p.x, p.y);
-    c.lineTo(p.x, p.y + p.h);
-    c.lineTo(p.w, p.y + p.h);
-    c.strokeStyle = clr;
-    c.lineWidth = p.lw;
+  function getPeriodUTC(xlc) {
+    return new Date(xlc.max) - new Date(xlc.min);
+  }
+
+  function getYCPer(p, ylc) {
+    return (ylc.max - ylc.min) / p.h;
+  }
+
+  function dXC(c, p, xlc, t) {
+    const st = p.w / POINTS;
+    const stdiff = t / p.w;
+    const xshft = p.w * 0.06;
+    const tshft = stdiff * xshft;
+    const yshft = (p.y + p.h) * 0.05
+
+    c.beginPath()
+    c.fillStyle = COLORS.FONT;
+    c.font = `12px ${FF}`;
+
+    for (let i = 0, x = p.x; i < POINTS; i++, x += st){
+      const y = p.y + p.h;
+      const xx = x + xshft;
+      const txt = getDate(xlc, t, tshft, i)
+        .toLocaleString('en-us', { month: 'short', day: '2-digit' });
+      c.moveTo(xx, y);
+      c.fillText(txt, xx - xshft / 2, y + yshft);
+    }
+    c.lineWidth = p.clw;
     c.stroke();
+  }
+
+  function dYC(c, p, ylc, t) {
+    const ys = ylc.min - t * p.h * 0.05;
+    const st = t * p.h / POINTS;
+    const sty = p.h / POINTS;
+    console.log(t, ys, st);
+
+    c.beginPath()
+    for (let i = 0, y = p.y + p.h; i < POINTS; i++, y -= sty) {
+      console.log('here', sty, y);
+      c.moveTo(p.x, y);
+      c.lineTo(p.w, y);
+    }
+    c.lineWidth = p.clw;
+    c.stroke();
+  }
+
+  function getDate(xlc, diff, tshft, pnts) {
+    return new Date((xlc.min + diff / POINTS * pnts) + tshft);
   }
 
   function setUpCnvs(c, w, h) {
