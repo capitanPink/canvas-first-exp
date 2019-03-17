@@ -16,8 +16,10 @@ function Chart(opt) {
 
   const chartProps = {
     x: 0,
-    y: h * 0.6,
-    w: w
+    y: h * 0.1,
+    w: w,
+    h: h * 0.55,
+    lw: 2
   };
 
   const minChartProps = {
@@ -28,10 +30,11 @@ function Chart(opt) {
     boxW: w * 0.25,
     boxH: h * 0.0565,
     xBox: w * 0.9925 - w * 0.25,
-    yBox: h * 0.652
+    yBox: h * 0.652,
+    lw: 1
   };
 
-  let xl, yl, indxs;
+  let xl, yl, xlc, ylc, indxs;
 
   const actvz = {
     s: null,
@@ -51,22 +54,18 @@ function Chart(opt) {
     _this.data = data;
     const chartCols = _this.data.columns;
     const mergedCols = mergeCols(chartCols);
-    xl = findMaxMin(mergedCols.x, actvz);
+    xl = findMaxMin(mergedCols.x, actvz, true);
     yl  = findMaxMin(mergedCols.y, actvz);
 
     drawMinChart(_this.data, ctx, minChartProps, xl, yl, COLORS);
-    drawChartCoordinates(ctx, chartProps, COLORS.AXIS, 1);
+    drawChartCoordinates(ctx, chartProps, COLORS.AXIS);
   }
 
   function drawMinChart(data, c, p, xl, yl, clrs, d = {}, m) {
     clearChart(c, 0, p.y, p.w, p.y + p.h);
     drawMovingSquire(c, p, clrs, d, m);
-    drawMiniature(data, c, w, h, p, xl, yl, UTC_DAY, 1);
-    drawMinChartCoordinates(c, p, clrs.AXIS, 1);
-  }
-
-  function clearChart(c, x, y, w, h) {
-    c.clearRect(x, y, w, h);
+    drawMiniature(data, c, w, h, p, xl, yl, UTC_DAY);
+    drawMinChartCoordinates(c, p, clrs.AXIS);
   }
 
   function bindEvents(c, p, clrs) {
@@ -182,8 +181,7 @@ function Chart(opt) {
   }
 
   function getArrayCut(cols, indxs) {
-    console.log(cols, actvz);
-    return cols.map((a) => a.slice(indxs.s, indxs.e + 1));
+    return cols.map((a) => [a[0]].concat(a.slice(indxs.s, indxs.e + 1)));
   }
 
   function drawMovingSquire(c, p, clrs, d, mX) {
@@ -203,7 +201,7 @@ function Chart(opt) {
     drawRect(c, x - 5, y - 1, bw + 10, bh + 2, clrs.BOX_BRDR);
     drawRect(c, x, y, bw, bh, clrs.WHITE);
 
-    drawMainChart(p.w, actvz);
+    drawMainChart(_this.data, ctx, chartProps, actvz, UTC_DAY);
   }
 
   function drawRect(c, x, y, w, h, clr) {
@@ -212,15 +210,37 @@ function Chart(opt) {
     c.fillRect(x, y, w, h);
   }
 
-  function drawMainChart(w, actvz) {
+  function drawMainChart(data, c, p, actvz, per) {
+    const colors = Object.values(data.colors);
+    console.log(colors);
     indxs = findIndexes(p.w, actvz);
+    const aCut = getArrayCut(data.columns, indxs);
+    console.log('acut', aCut);
+    const mergedCols = mergeCols(aCut);
 
-    console.log('active zone', indxs);
-    // console.log('length', actvz.length);
-    console.log(getArrayCut(_this.data.columns, indxs));
+    xlc = findMaxMin(mergedCols.x, actvz);
+    ylc  = findMaxMin(mergedCols.y, actvz);
+
+    const { stX, stY } = getSteps(p.w, p.h * 0.9, xlc, ylc, per);
+    clearChart(c, p.x, 0, p.w, p.y + p.h);
+    for(let i = aCut.length - 1; i > 0; i--) {
+      c.beginPath();
+      for (let j = 0, x = p.x; j < aCut[i].length; j++, x += stX) {
+        const y = p.y + p.h - aCut[i][j] * stY;
+        if (j === 1) {
+          c.moveTo(x, y);
+        } else {
+          c.lineTo(x, y);
+        } 
+      }
+      c.strokeStyle = colors[i - 1];
+      c.lineWidth = p.lw;
+      c.stroke();
+    }
+    console.log(aCut);
   }
 
-  function drawMiniature(chart, c, w, h, p, xl, yl, per, lw) {
+  function drawMiniature(chart, c, w, h, p, xl, yl, per) {
     const { stX, stY } = getSteps(w, p.h * 0.85, xl, yl, per);
     const colors = Object.values(chart.colors);
     const cols = chart.columns;
@@ -233,30 +253,30 @@ function Chart(opt) {
           c.moveTo(x, y);
         } else {
           c.lineTo(x, y);
-        }
-        c.strokeStyle = colors[i - 1];
+        } 
       }
-      c.lineWidth = lw;
+      c.strokeStyle = colors[i - 1];
+      c.lineWidth = p.lw;
       c.stroke();
     }
   }
 
-  function drawChartCoordinates(c, p, clr, lw) {
+  function drawChartCoordinates(c, p, clr) {
     c.beginPath();
-    c.moveTo(p.x, p.y);
-    c.lineTo(p.w, p.y);
+    c.moveTo(p.x, p.y + p.h);
+    c.lineTo(p.w, p.y + p.h);
     c.strokeStyle = clr;
-    c.lineWidth = lw;
+    c.lineWidth = p.lw;
     c.stroke();
   }
 
-  function drawMinChartCoordinates(c, p, clr, lw) {
+  function drawMinChartCoordinates(c, p, clr) {
     c.beginPath();
     c.moveTo(p.x, p.y);
     c.lineTo(p.x, p.y + p.h);
     c.lineTo(p.w, p.y + p.h);
     c.strokeStyle = clr;
-    c.lineWidth = lw;
+    c.lineWidth = p.lw;
     c.stroke();
   }
 
@@ -268,8 +288,12 @@ function Chart(opt) {
     return { c, w: c.width, h: c.height };
   }
 
-  function findMaxMin(array, actvz) {
-    if (array[0].startsWith('x')) {
+  function clearChart(c, x, y, w, h) {
+    c.clearRect(x, y, w, h);
+  }
+
+  function findMaxMin(array, actvz, isM) {
+    if (isM && array[0].startsWith('x')) {
       actvz.length = array.length;
     }
     let max = -Infinity, min = Infinity;
