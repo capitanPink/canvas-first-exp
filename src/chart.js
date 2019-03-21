@@ -10,13 +10,24 @@ function Chart(opt) {
     BOX_BRDR: '#ddeaf3',
     BOX: '#f5f9fb',
     WHITE: '#ffffff',
-    FONT: '#999c9e'
+    FONT: '#999c9e',
+    BLACK: '#000000'
   };
   const FF = opt.fontFamaly || 'Roboto';
+  const font = `${opt.fontSize || 9}pt ${FF}`;
+  const fontlbl = `${opt.fontLblSize || 10}pt ${FF}`;
+  const fontHdr = `${opt.fontHdrSize || 10}pt ${FF}`;
   const el = opt.elem;
   
   const { c, w, h } = setUpCnvs(document.createElement('canvas'), opt.width, opt.height);
-  const ctx = c.getContext("2d");
+  const ctx = c.getContext('2d');
+  const btns = [];
+  // ctx.fillStyle = "red";
+  // c.globalAlpha = 0.4;
+  // ctx.fillRect(0,0,w,h);
+  // c.globalAlpha = 1;
+  // c.style.opacity = '0.2'
+  // ctx.fill();
 
   const chartProps = {
     x: 0,
@@ -31,7 +42,7 @@ function Chart(opt) {
     x: 0,
     y: h * 0.65,
     w: w,
-    h: h * 0.065,
+    h: h * 0.06,
     boxW: w * 0.25,
     boxH: h * 0.0565,
     xBox: w * 0.9925 - w * 0.25,
@@ -48,14 +59,17 @@ function Chart(opt) {
   };
 
   function build(data) {
-    
-    drawChart(data);
+    console.log(data);
+    const nmsClrs = Object.keys(data.names).map((e) => [e, data.names[e], data.colors[e]]);
+    // console.log('nmsClrs', nmsClrs);
+
+    drawChart(data, minChartProps, nmsClrs);
     bindEvents(c, minChartProps, chartProps, COLORS);
 
     el.appendChild(c);
   }
 
-  function drawChart(data) {
+  function drawChart(data, p, nmsClrs) {
     _this.data = data;
     const chartCols = _this.data.columns;
     const mergedCols = mergeCols(chartCols);
@@ -63,11 +77,12 @@ function Chart(opt) {
     yl  = findMaxMin(mergedCols.y, actvz);
 
     drawMinChart(_this.data, ctx, minChartProps, xl, yl, COLORS);
+    drawButtons(ctx, p.w * 0.02, p.y + p.h + h * 0.03, nmsClrs);
   }
 
   function drawMinChart(data, c, p, xl, yl, clrs, d = {}, m) {
     RAF(() => {
-      clearChart(c, 0, p.y, p.w, p.y + p.h);
+      clearChart(c, 0, p.y, p.w, p.h);
       drawMovingSquire(c, p, clrs, d, m);
       drawMiniature(data, c, w, h, p, xl, yl, PERIOD);
       drawMinChartCoordinates(c, p, COLORS.AXIS, xl, PERIOD);
@@ -90,6 +105,20 @@ function Chart(opt) {
     c.addEventListener('touchend', handleTouchEnd, false);
     c.addEventListener('touchmove', throttle(handleTouchMove, 15), false);
 
+    // To add
+    // c.addEventListener('mouseover', handleTouchStart, false);
+    // c.addEventListener('mouseout', handleTouchEnd, false);
+    // c.addEventListener('mousemove', throttle(handleTouchMove, 15), false);
+
+    function handleBtnsOnTouch(c, x, y) {
+      btns.forEach(e => {
+        if (x > e[3] && x < e[3] + e[4] && y > e[6] && y < e[6] + e[5]) {
+          toggleBtnState(c, e[7], e[8], e[5], [e[0], e[1], e[2]], !e[9]);
+          e[9] = !e[9];
+        }
+      });
+    }
+
     function handleTouchEnd(event) {
       const { clientX } = event.changedTouches[0];
   
@@ -105,18 +134,18 @@ function Chart(opt) {
     function handleTouchStart(event) {
       self.prev = undefined;
       const { clientX, clientY } = event.touches[0];
-      
+
+      handleBtnsOnTouch(ctx, clientX, clientY);
+
       isInMin = clientY > p.y && clientY < p.y + p.h;
       self.isDL = inClxs(clientX, getClxslim()) && isInMin;
       self.isDR = inClxe(clientX, getClxelim()) && isInMin;
       self.Mvd = clientX > self.clxs && clientX < self.clxs + p.boxW && isInMin;
-  
+
       if (self.Mvd) {
         self.diffs.xl = clientX - self.clxs;
         self.diffs.xr = self.clxe - clientX;
       } else if (isInM(clientX, clientY, pMain)) {
-        console.log('here', clientX, clientY);
-        console.log('activz', actvz);
         drawMainChart(_this.data, ctx, chartProps, actvz, PERIOD, COLORS, { clientX, clientY });
       }
     }
@@ -259,7 +288,7 @@ function Chart(opt) {
           vals[aCut[i][0]].clr = clr;
           fFlag = false;
         }
-
+        
         if (j === 1) {
           c.moveTo(x, y);
         } else {
@@ -271,59 +300,164 @@ function Chart(opt) {
       c.lineWidth = p.lw;
       c.stroke();
     }
-    console.log('vals', vals);
     if (val) {
-      const nms = Object.keys(vals);
-      Object.values(vals).forEach((e, i) => drawVal(c, p, e, COLORS, i, nms, xlc));
+      drawVal(c, p, vals, COLORS, xlc);
     }
   }
 
+  function drawVal(c, p, vals, clrs, xlc) {
+    // console.log('vals', vals);
+    const valsVls = Object.values(vals);
+    
+    const valsNms = Object.keys(vals);
+    // console.log('vals', valsVls, valsNms);
 
+    const { names } = _this.data;
+    const curx = valsVls[0].x;
+    const t = formatDate(new Date((xlc.max - xlc.min) / p.w * curx + xlc.min),
+          { weekday: 'short', month: 'short', day: '2-digit' });
+    const tw = mesT(c, t) * 1.5;
+    const lch = parseInt(fontlbl) * 2 + 14;
+    const lsA = [];
+    let cmnw = 0;
 
-  function drawVal(c, p, vals, clrs, i, nms, xlc) {
-    if (!i) {
-      c.beginPath();
-      c.moveTo(vals.x, p.y)
-      c.lineTo(vals.x, p.y + p.h);
-      c.strokeStyle = clrs.AXIS;
-      c.lineWidth = p.clw;
-      c.stroke();
-    }
+    valsVls.forEach((e, i)=> {
+      if (!i) {
+        c.beginPath();
+        c.moveTo(e.x, p.y)
+        c.lineTo(e.x, p.y + p.h);
+        c.strokeStyle = clrs.AXIS;
+        c.lineWidth = p.clw;
+        c.stroke();
+      }
+      
+      drawArc(c, e.x, e.y, 5, 0, 2 * Math.PI, e.clr, clrs.WHITE, 2);
 
+      const mls = getMxLLn(c, names[valsNms[i]], e.yv) + 10;
+      lsA.push(getLSz(names[valsNms[i]], mls, lch, e.yv, e.clr));
+      cmnw += mls;
+    });
+
+    const bw = cmnw > tw ? cmnw : tw;
+    const hfh = parseInt(fontHdr);
+    const lh = hfh + parseInt(lsA.reduce((a, n) => a < n[2] ? n[2] : a, 0)) + 20;
+    const { x, y } = findBoxCoord(curx, p, bw, lh);
+
+    roundRect(c, x, y, bw, lh, 3, COLORS.AXIS, COLORS.WHITE);
+    drawTxt(c, t, x + bw/2, y + hfh * 0.5, 'center', 'top', COLORS.BLACK);
+
+    lsA.reverse().forEach((e, i) => {
+      const wPerE = bw / lsA.length;
+      const xt = x + wPerE * (i + 1) - wPerE / 2;
+      const yt = y + hfh;
+      drawTxt(c, e[3], xt, yt + e[2] * 0.5, 'center', 'top', e[4]);
+      drawTxt(c, e[0], xt, yt + e[2], 'center', 'top', e[4]);
+    });
+    
+  }
+
+  function drawArc(c, x, y, r, sA, eA, strSt, flSt, lw, dr) {
+    c.save();
     c.beginPath();
-    c.arc(vals.x, vals.y, 5, 0, 2 * Math.PI);
-    c.strokeStyle = vals.clr;
-    c.fillStyle = clrs.WHITE;;
-    c.lineWidth = p.lw;
+    c.arc(x, y, r, sA, eA, dr);
+    c.strokeStyle = strSt;
+    c.fillStyle = flSt;
+    c.lineWidth = lw;
     c.fill();
     c.stroke();
+    c.restore();
+  }
 
-    const { x, y } = findBoxCoord(vals.x, p, 62, 47);
-    console.log('(xlc.max - xlc.min) / p.w * x + xlc.min', x);
-    const t = formatDate(new Date((xlc.max - xlc.min) / p.w * vals.x + xlc.min));
-    console.log(t);
-    roundRect(c, x, y, 62, 47, 3, COLORS);
-    getLabelsLngth(c, nms[i], vals.x, vals.yv);
+  function drawButtons(c, x, y, nmsClrs) {
+    this.pw;
+    const btnH = parseInt(fontHdr) * 3.5;
+
+    clearChart(c, 0, y - 3, w, btnH + btnH * 0.3);
+    nmsClrs.forEach((e, i) => drawButton(c, x, y, btnH, e, i, this.px));
+    console.log('btns', btns);
+  }
+
+  function drawButton(c, x, y, btnH, e, i) {
+    const txtW = mesT(c, e[1]);
+    const bw = w * 0.2 > 30 + txtW ? w * 0.2 : 30 + txtW;
+    const bx = x + (bw + (i ? 10 : 0)) * i;
+    const xa = bx + btnH * 0.5;
+    const ya = y + btnH * 0.5;
+
+    btns[i] = [...e, bx, bw, btnH, y, xa, ya, true];
+
+    roundRect(c, bx, y, bw , btnH, btnH * 0.5, COLORS.AXIS, COLORS.WHITE);
+    drawTxt(c, e[1], bx + bw * 0.6, ya + btnH * 0.05, 'center', 'middle', fontHdr);
+    toggleBtnState(c, xa, ya, btnH, e, true);
+  }
+
+  function toggleBtnState(c, xa, ya, btnH, e, actv) {
+    drawArc(c, xa, ya, btnH * 0.3 , 0, 2 * Math.PI, COLORS.WHITE, e[2]);
+    if (actv) {
+      drawTick(c, xa - 6, ya, 2, COLORS.WHITE);
+    } else {
+      drawArc(c, xa, ya, btnH * 0.23 , 0, 2 * Math.PI, COLORS.WHITE, COLORS.WHITE);
+    }
+  }
+
+  function drawTick(c, x, y, lw, clr) {
+    c.save();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 4,y + 4);
+    ctx.lineTo(x + 11, y - 4);
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = clr;
+    ctx.stroke();
+    c.restore();
+  }
+
+  function drawTxt(c, t, x, y, al, tb, clr, font) {
+    c.save();
+    c.beginPath();
+    c.moveTo(x, y + y * 0.2);
+    c.fillStyle = clr;
+    c.font = font || fontHdr;
+    c.textAlign = al; 
+    c.textBaseline = tb; 
+    c.fillText(t, x, y);
+    c.restore();
+  }
+
+  function getMxLLn(c, n, y) {
+    // console.log('maxL', n, y);
+    return Math.max(...[mesT(c, n), mesT(c, y)]);
+  }
+
+  function getLSz(n, w, h, y, clr) {
+    return [n, w, h, y, clr];
+  }
+
+  function mesT(c, v) {
+    // console.log(arguments);
+    return c.measureText(v).width;
   }
 
   function findBoxCoord(x, p, w, h) {
+    // to fix
+    // console.log('boxw', w);
     const xr = x - 0.25 * w;
     const xl = x - 0.75 * w;
     const mxx = p.w * 0.96;
     const mnx = p.w * 0.04;
+    // console.log({
+    //   x: x + w > p.w && x < mxx? xl : x > mxx ? x - w : x < mnx ? x : xr,
+    //   y: p.y
+    // })
     return {
       x: x + w > p.w && x < mxx? xl : x > mxx ? x - w : x < mnx ? x : xr,
       y: p.y
     };
   }
 
-  function getLabelsLngth(c, n, x, y) {
-    console.log(c.measureText(n).width);
-    console.log(c.measureText(x + '').width);
-    console.log(c.measureText(y + '').width);
-  }
-
-  function roundRect(c, x, y, w, h, r, clr) {
+  function roundRect(c, x, y, w, h, r, strSt, flSt) {
+    console.log('args', arguments);
+    c.save();
     c.beginPath();
     c.moveTo(x + r, y);
     c.lineTo(x + w - r, y);
@@ -334,11 +468,17 @@ function Chart(opt) {
     c.quadraticCurveTo(x, y + h, x, y + h - r);
     c.lineTo(x, y + r);
     c.quadraticCurveTo(x, y, x + r, y);
-    c.strokeStyle = clr.AXIS;
+    c.strokeStyle = strSt;
     c.closePath();
     c.stroke();
-    c.fillStyle = clr.WHITE;
+    // c.translate(300,300);
+    // c.shadowColor = '#D5D5D5';
+    // c.shadowBlur = 15;
+    // c.globalAlpha = 0.8
+    // c.shadowOffsetY = 1;
+    c.fillStyle = flSt;
     c.fill()
+    c.restore();
   }
 
   function drawMiniature(chart, c, w, h, p, xl, yl, per) {
@@ -373,7 +513,7 @@ function Chart(opt) {
     c.closePath();
 
     dXC(c, p, xlc, getPeriodUTC(xlc));
-    dYC(c, p, ylc, getYCPer(p, ylc));
+    dYC(c, p, getYCPer(p, ylc));
   }
 
   function drawMinChartCoordinates(c, p, clr) {
@@ -404,12 +544,12 @@ function Chart(opt) {
 
     c.beginPath()
     c.fillStyle = COLORS.FONT;
-    c.font = `12px ${FF}`;
+    c.font = font;
 
     for (let i = 0, x = p.x; i < POINTS; i++, x += st){
       const y = p.y + p.h;
       const xx = x + xshft;
-      const txt = formatDate(getDate(xlc, t, tshft, i));
+      const txt = formatDate(getDate(xlc, t, tshft, i), { month: 'short', day: '2-digit' });
       c.moveTo(xx, y);
       c.fillText(txt, xx - xshft / 2, y + yshft);
     }
@@ -417,7 +557,7 @@ function Chart(opt) {
     c.stroke();
   }
 
-  function dYC(c, p, ylc, t) {
+  function dYC(c, p, t) {
     const st = t * p.h / POINTS;
     const sty = p.h / POINTS;
 
@@ -438,19 +578,22 @@ function Chart(opt) {
     return new Date((xlc.min + diff / POINTS * pnts) + tshft);
   }
 
-  function formatDate(d) {
-    return d.toLocaleString('en-us', { month: 'short', day: '2-digit' });
+  function formatDate(d, f) {
+    return d.toLocaleString('en-us', f);
   }
 
   function setUpCnvs(c, w, h) {
+    const dw = document.body.scrollWidth;
+    const dh = document.body.scrollHeight;
     c.style.margin = 'auto';
     c.style.display = 'block';
-    c.width = w || document.body.scrollWidth * 0.98;
-    c.height = h || document.body.scrollHeight * 0.98;
+    c.width = w || dw * 0.98;
+    c.height = h || dh * 0.98;
     return { c, w: c.width, h: c.height };
   }
 
   function clearChart(c, x, y, w, h) {
+    console.log('clearing', arguments);
     c.clearRect(x, y, w, h);
   }
 
