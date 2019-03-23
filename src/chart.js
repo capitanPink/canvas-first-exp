@@ -1,35 +1,46 @@
+// refactor getClr - shouldn't be execute at every places
+// refactor dates scrolling
+// refactor last date shouldn't change
+// refactor incorrect left amount with different diagrams
+// refactor miniature doesnt shows correctly with different diagrams + 
+// refactor if all lines disabled we have no NaNs on left grid + 
+// refactor if all diagrams turned off and switch to another mode and press main chart - bug + 
+// change drawVal on touchMove
+// fix moving square
 function Chart(opt) {
   const _this = this;
+  const { keys, values } = Object;
   const RAF = window.requestAnimationFrame;
 
-  const THEME = opt.theme || 'light';
   const PERIOD = opt.period || 1000 * 60 * 60 * 24;
   const POINTS = opt.points || 6;
-  const COLORS = {
+  const CLRS = {
     AXIS: '#ecf0f3',
     BOX_BRDR: '#ddeaf3',
     BOX: '#f5f9fb',
     WHITE: '#ffffff',
     FONT: '#999c9e',
-    BLACK: '#000000'
+    LBL: '',
+    BLACK: '#000000',
+    MODE: '#008cea',
+    NIGHT: '#222f3f',
+    NAXIS: '#ecf0f314',
+    NMBOX: '#1e2938',
+    NLBL: '#0a0a0a66'
   };
   const FF = opt.fontFamaly || 'Roboto';
   const font = `${opt.fontSize || 9}pt ${FF}`;
   const fontlbl = `${opt.fontLblSize || 10}pt ${FF}`;
   const fontHdr = `${opt.fontHdrSize || 10}pt ${FF}`;
+  const fontMode = `${opt.fontHdrSize || 14}pt ${FF}`;
   const el = opt.elem;
+  const cvr = document.createElement('div');
   
-  const { c, w, h } = setUpCnvs(document.createElement('canvas'), opt.width, opt.height);
+  let { c, w, h } = setUpCnvs(document.createElement('canvas'), opt.width, opt.height);
   const ctx = c.getContext('2d');
   const btns = [];
-  // ctx.fillStyle = "red";
-  // c.globalAlpha = 0.4;
-  // ctx.fillRect(0,0,w,h);
-  // c.globalAlpha = 1;
-  // c.style.opacity = '0.2'
-  // ctx.fill();
 
-  const chartProps = {
+  const chrtP = {
     x: 0,
     y: h * 0.1,
     w: w,
@@ -50,7 +61,27 @@ function Chart(opt) {
     lw: 1
   };
 
-  let xl, yl;
+  const sWP = {
+    txtD: 'Switch to day mode',
+    txtN: 'Switch to night mode',
+    x: w / 2,
+    y: h * 0.95 - parseInt(fontMode) * 2,
+    nMd: true,
+    th: parseInt(fontMode) * 2,
+    tw() {
+      return mesT(ctx, this.nMd ? this.txtN : this.txtD);
+    }
+  };
+
+  const bgClr = () => (sWP.nMd ? CLRS.NIGHT : CLRS.WHITE);
+  const axClr = () => (sWP.nMd ? CLRS.NAXIS : CLRS.AXIS);
+  const mBoxClr = () => (sWP.nMd ? CLRS.NMBOX : CLRS.BOX);
+  const txtClr = () => (sWP.nMd ? CLRS.WHITE : CLRS.BLACK);
+  const lblClr = () => (sWP.nMd ? CLRS.NLBL : CLRS.LBL);
+
+  const flgs = {};
+
+  let xl, yl, nmsClrs;
 
   const actvz = {
     s: null,
@@ -59,37 +90,40 @@ function Chart(opt) {
   };
 
   function build(data) {
-    console.log(data);
-    const nmsClrs = Object.keys(data.names).map((e) => [e, data.names[e], data.colors[e]]);
-    // console.log('nmsClrs', nmsClrs);
+    _this.data = data;
+    nmsClrs = keys(data.names).map((e) => [e, data.names[e], data.colors[e]]);
+    drawRect(ctx, 0, 0, w, h, bgClr());
 
-    drawChart(data, minChartProps, nmsClrs);
-    bindEvents(c, minChartProps, chartProps, COLORS);
+    drawChart(data, minChartProps, nmsClrs, true);
+    bindEvents(data, c, minChartProps, chrtP, CLRS);
 
-    el.appendChild(c);
+    el.appendChild(cvr);
+    cvr.style.backgroundColor = bgClr();
+    cvr.appendChild(c);
   }
 
-  function drawChart(data, p, nmsClrs) {
-    _this.data = data;
-    const chartCols = _this.data.columns;
-    const mergedCols = mergeCols(chartCols);
-    xl = findMaxMin(mergedCols.x, actvz, true);
-    yl  = findMaxMin(mergedCols.y, actvz);
+  function drawChart(data, p, nmsClrs, init) {
+    drawRect(ctx, 0, 0, w, h, bgClr());
 
-    drawMinChart(_this.data, ctx, minChartProps, xl, yl, COLORS);
-    drawButtons(ctx, p.w * 0.02, p.y + p.h + h * 0.03, nmsClrs);
+    const chartCols = data.columns;
+    const mergedCols = mrgCls(chartCols);
+    xl = fndMxMn(mergedCols.x, actvz, true);
+    yl  = fndMxMn(mergedCols.y, actvz);
+
+    drawDwnBtn(ctx, sWP.nMd ? sWP.txtD : sWP.txtN, sWP, 'center', 'middle', CLRS.MODE, fontMode);
+    drawMinChart(data, ctx, minChartProps, xl, yl, CLRS);
+    drawButtons(ctx, p.x, p.y + p.h + h * 0.03, nmsClrs, init);
   }
 
   function drawMinChart(data, c, p, xl, yl, clrs, d = {}, m) {
     RAF(() => {
       clearChart(c, 0, p.y, p.w, p.h);
-      drawMovingSquire(c, p, clrs, d, m);
-      drawMiniature(data, c, w, h, p, xl, yl, PERIOD);
-      drawMinChartCoordinates(c, p, COLORS.AXIS, xl, PERIOD);
+      drawRect(c, 0, p.y, p.w, p.h + 1, bgClr());
+      drawMovingSquire(data, c, p, clrs, d, m);
     });
   }
 
-  function bindEvents(c, p, pMain, clrs) {
+  function bindEvents(data, c, p, pMain, clrs) {
     const self = this;
     this.clxs = p.xBox;
     this.clxe = p.xBox + p.boxW;
@@ -111,12 +145,25 @@ function Chart(opt) {
     // c.addEventListener('mousemove', throttle(handleTouchMove, 15), false);
 
     function handleBtnsOnTouch(c, x, y) {
+      let f = false;
       btns.forEach(e => {
         if (x > e[3] && x < e[3] + e[4] && y > e[6] && y < e[6] + e[5]) {
-          toggleBtnState(c, e[7], e[8], e[5], [e[0], e[1], e[2]], !e[9]);
-          e[9] = !e[9];
+          toggleBtnState(c, e[7], e[8], e[5], [e[0], e[1], e[2]], flgs[e[0]] = !flgs[e[0]]);
+          drawChart(filterData(_this.data, flgs), minChartProps, nmsClrs, false);
+          f = true;
         }
       });
+      return f;
+    }
+
+    function handleSwMTouch(x, y, s) {
+      const tw = s.tw();
+      if (x > s.x - tw / 2 && x < s.x + tw / 2 && y > s.y - s.th / 2 && y < s.y + s.th / 2) {
+        s.nMd = !s.nMd;
+        drawChart(filterData(_this.data, flgs), minChartProps, nmsClrs, false);
+        cvr.style.backgroundColor = bgClr();
+        return true;
+      }
     }
 
     function handleTouchEnd(event) {
@@ -125,9 +172,11 @@ function Chart(opt) {
       if (self.isDL) {
         if (self.isB2sm) self.clxs = p.xBox;
         else self.clxs = clientX;
+        self.isDL = null;
       } else if (self.isDR) {
         if (!self.isB2sm) self.clxe = clientX;
         else self.clxe = p.xBox + p.boxW;
+        self.isDR = null;
       }
     }
   
@@ -135,7 +184,9 @@ function Chart(opt) {
       self.prev = undefined;
       const { clientX, clientY } = event.touches[0];
 
-      handleBtnsOnTouch(ctx, clientX, clientY);
+      if (handleBtnsOnTouch(ctx, clientX, clientY)
+        || handleSwMTouch(clientX, clientY, sWP)
+        || showVal(clientX, clientY)) return;
 
       isInMin = clientY > p.y && clientY < p.y + p.h;
       self.isDL = inClxs(clientX, getClxslim()) && isInMin;
@@ -145,13 +196,18 @@ function Chart(opt) {
       if (self.Mvd) {
         self.diffs.xl = clientX - self.clxs;
         self.diffs.xr = self.clxe - clientX;
-      } else if (isInM(clientX, clientY, pMain)) {
-        drawMainChart(_this.data, ctx, chartProps, actvz, PERIOD, COLORS, { clientX, clientY });
+      }
+    }
+
+    function showVal(clientX, clientY) {
+      if (isInM(clientX, clientY, pMain)) {
+        drawMainChart(filterData(_this.data, flgs), ctx, chrtP, actvz, PERIOD, CLRS, { clientX, clientY });
+        return true;
       }
     }
   
     function handleTouchMove(event) {
-      const { clientX } = event.touches[0];
+      const { clientX, clientY } = event.touches[0];
       self.isMvr = self.isDR && self.prev < clientX && clientX > p.xBox + p.boxW - 5;
       self.isMvl = self.isDL && self.prev > clientX && clientX < p.xBox + 5;
       self.prev = clientX;
@@ -166,6 +222,8 @@ function Chart(opt) {
         && clientX > self.diffs.xl + 2
         && clientX + self.diffs.xr < w - 2;
 
+      if (showVal(clientX, clientY)) return;
+
       if (isDrggbl) {
         
         if (self.isMvr) {
@@ -173,25 +231,25 @@ function Chart(opt) {
             
             } else {
               const d = { xl: self.isDL && clientX, xr: self.isDR && clientX };
-              drawMinChart(_this.data, ctx, p, xl, yl, clrs, d);
+              drawMinChart(filterData(_this.data, flgs), ctx, p, xl, yl, clrs, d);
             }
         } else if (self.isMvl) {
           if (!self.isMvl && self.isB2sm) {
             
             } else {
               const d = { xl: self.isDL && clientX, xr: self.isDR && clientX };
-              drawMinChart(_this.data, ctx, p, xl, yl, clrs, d);
+              drawMinChart(filterData(_this.data, flgs), ctx, p, xl, yl, clrs, d);
             }
         } else if (!self.isB2sm) {
           const d = { xl: self.isDL && clientX, xr: self.isDR && clientX };
-          drawMinChart(_this.data, ctx, p, xl, yl, clrs, d);
+          drawMinChart(filterData(_this.data, flgs), ctx, p, xl, yl, clrs, d);
         }
         
         
       } else if (isMvbl) {
         self.clxs = clientX - self.diffs.xl;
         self.clxe = clientX + self.diffs.xr;
-        drawMinChart(_this.data, ctx, p, xl, yl, clrs, {}, self.clxs);
+        drawMinChart(filterData(_this.data, flgs), ctx, p, xl, yl, clrs, {}, self.clxs);
       }
     }
 
@@ -204,7 +262,7 @@ function Chart(opt) {
     }
 
     function getClxelim() {
-      return { d: this.clxe - 15, t: this.clxe + 10 };
+      return { d: this.clxe + 5, t: this.clxe + 20 };
     }
 
     function inClxs(clx, clxslim) {
@@ -216,7 +274,7 @@ function Chart(opt) {
     }
   }
 
-  function findIndexes(w, actvz) {
+  function fndIndxs(w, actvz) {
     const i = w / actvz.length;
     return {
       s: Math.round(actvz.s / i),
@@ -224,11 +282,11 @@ function Chart(opt) {
     };
   }
 
-  function getArrayCut(cols, indxs) {
+  function getArCut(cols, indxs) {
     return cols.map((a) => [a[0]].concat(a.slice(indxs.s, indxs.e + 1)));
   }
 
-  function drawMovingSquire(c, p, clrs, d, mX) {
+  function drawMovingSquire(data, c, p, clrs, d, mX) {
     const temp = d.xl && p.xBox - d.xl;
     p.xBox = mX || d.xl || p.xBox;
     p.boxW = d.xr ? d.xr - p.xBox : d.xl ? p.boxW + temp : p.boxW;
@@ -240,29 +298,39 @@ function Chart(opt) {
     const bh = p.boxH;
     const x = p.xBox;
     const y = p.yBox;
-
-    drawRect(c, p.x, p.y, p.w, p.h, clrs.BOX);
-    drawRect(c, x - 5, y - 1, bw + 10, bh + 2, clrs.BOX_BRDR);
-    drawRect(c, x, y, bw, bh, clrs.WHITE);
     
-    drawMainChart(_this.data, ctx, chartProps, actvz, PERIOD, COLORS);
+    drawRect(c, x - 5, y - 1, bw + 10, bh + 2, clrs.BOX_BRDR, 0.6);
+    drawRect(c, x, y, bw, bh, bgClr());
+    drawMiniature(data, c, w, h, p, xl, yl, PERIOD);
+    drawRect(c, p.x, p.y, x - 4, p.h, mBoxClr(), 0.8);
+    drawRect(c, x + p.boxW + 4, p.y, p.w - x + p.boxW, p.h, mBoxClr(), 0.8);
+    drawMainChart(data, ctx, chrtP, actvz, PERIOD, CLRS);
   }
 
-  function drawRect(c, x, y, w, h, clr) {
+  function drawRect(c, x, y, w, h, clr, glA) {
+    c.save();
     c.beginPath();
+    c.globalAlpha = glA || 1;
     c.fillStyle = clr;
     c.fillRect(x, y, w, h);
+    c.restore();
   }
 
-  function drawMainChart(data, c, p, actvz, per, COLORS, val) {
-    const clrs = Object.values(data.colors);
+  function drawDwnBtn(c, t, s, al, tb, clr, fnt) {
+    clearChart(c, 0, s.y - s.th,  w, h - s.y + s.th);
+    drawRect(c, 0, s.y - s.th - 1,  w, h - s.y + s.th, bgClr());
+    drawTxt(ctx, t, s.x, s.y, al, tb, clr, fnt);
+  }
+
+  function drawMainChart(data, c, p, actvz, per, CLRS, val) {
+    const clrs = values(data.colors);
     const yc = p.y + p.h + (p.y + p.h) * 0.06
     
-    const indxs = findIndexes(p.w, actvz);
-    const aCut = getArrayCut(data.columns, indxs);
-    const mCls = mergeCols(aCut);
-    const xlc = findMaxMin(mCls.x, actvz);
-    const ylc  = findMaxMin(mCls.y, actvz);
+    const indxs = fndIndxs(p.w, actvz);
+    const aCut = getArCut(data.columns, indxs);
+    const mCls = mrgCls(aCut);
+    const xlc = fndMxMn(mCls.x, actvz);
+    const ylc  = fndMxMn(mCls.y, actvz);
 
     let fFlag = true;
     const vals = {};
@@ -270,7 +338,8 @@ function Chart(opt) {
     const { stX } = getSteps(p.w, p.h * 0.8, xlc, ylc, per);
     
     clearChart(c, p.x, 0, p.w, yc);
-    drawChartCoordinates(ctx, p, COLORS.AXIS, xlc, ylc);
+    drawRect(c, p.x, 0, p.w, yc + 2, bgClr());
+    drawChrtCrdnts(ctx, p, axClr(), xlc, ylc);
 
     for(let i = aCut.length - 1; i > 0; i--) {
       const clr = clrs[i - 1];
@@ -279,7 +348,8 @@ function Chart(opt) {
 
       c.beginPath();
       for (let j = 1, x = p.x; j < aCut[i].length; j++, x += stX) {
-        const y = p.h + p.y - p.h * aCut[i][j] / ylc.max;
+        // console.log('(aCut[i][j] / ylc.max * 1.3)', (aCut[i][j] / (ylc.max * 1.3)));
+        const y = p.h + p.y - (p.h / 1.3 * aCut[i][j] / ylc.max)
 
         if (val && x > val.clientX && fFlag) {
           vals[aCut[i][0]].x = x;
@@ -301,18 +371,16 @@ function Chart(opt) {
       c.stroke();
     }
     if (val) {
-      drawVal(c, p, vals, COLORS, xlc);
+      drawVal(data, c, p, vals, xlc);
     }
   }
 
-  function drawVal(c, p, vals, clrs, xlc) {
-    // console.log('vals', vals);
-    const valsVls = Object.values(vals);
-    
-    const valsNms = Object.keys(vals);
-    // console.log('vals', valsVls, valsNms);
+  function drawVal(data, c, p, vals, xlc) {
+    if (!keys(vals).length) return;
+    const valsVls = values(vals);
+    const valsNms = keys(vals);
 
-    const { names } = _this.data;
+    const { names } = data;
     const curx = valsVls[0].x;
     const t = formatDate(new Date((xlc.max - xlc.min) / p.w * curx + xlc.min),
           { weekday: 'short', month: 'short', day: '2-digit' });
@@ -326,12 +394,12 @@ function Chart(opt) {
         c.beginPath();
         c.moveTo(e.x, p.y)
         c.lineTo(e.x, p.y + p.h);
-        c.strokeStyle = clrs.AXIS;
+        c.strokeStyle = axClr();
         c.lineWidth = p.clw;
         c.stroke();
       }
       
-      drawArc(c, e.x, e.y, 5, 0, 2 * Math.PI, e.clr, clrs.WHITE, 2);
+      drawArc(c, e.x, e.y, 5, 0, 2 * Math.PI, e.clr, bgClr(), 2);
 
       const mls = getMxLLn(c, names[valsNms[i]], e.yv) + 10;
       lsA.push(getLSz(names[valsNms[i]], mls, lch, e.yv, e.clr));
@@ -343,8 +411,8 @@ function Chart(opt) {
     const lh = hfh + parseInt(lsA.reduce((a, n) => a < n[2] ? n[2] : a, 0)) + 20;
     const { x, y } = findBoxCoord(curx, p, bw, lh);
 
-    roundRect(c, x, y, bw, lh, 3, COLORS.AXIS, COLORS.WHITE);
-    drawTxt(c, t, x + bw/2, y + hfh * 0.5, 'center', 'top', COLORS.BLACK);
+    roundRect(c, x, y, bw, lh, 3, lblClr(), bgClr(), true);
+    drawTxt(c, t, x + bw/2, y + hfh * 0.5, 'center', 'top', txtClr());
 
     lsA.reverse().forEach((e, i) => {
       const wPerE = bw / lsA.length;
@@ -368,35 +436,39 @@ function Chart(opt) {
     c.restore();
   }
 
-  function drawButtons(c, x, y, nmsClrs) {
+  function drawButtons(c, x, y, nmsClrs, init) {
     this.pw;
     const btnH = parseInt(fontHdr) * 3.5;
-
-    clearChart(c, 0, y - 3, w, btnH + btnH * 0.3);
-    nmsClrs.forEach((e, i) => drawButton(c, x, y, btnH, e, i, this.px));
-    console.log('btns', btns);
+    const yCl = y - 3;
+    const hCl = btnH + btnH * 0.3;
+    clearChart(c, 0, yCl, w, hCl);
+    drawRect(c, 0, yCl - 1, w, hCl + 2, bgClr());
+    nmsClrs.forEach((e, i) => drawButton(c, x, y, btnH, e, i, this.px, init));
   }
 
-  function drawButton(c, x, y, btnH, e, i) {
+  function drawButton(c, x, y, btnH, e, i, pw, init) {
     const txtW = mesT(c, e[1]);
     const bw = w * 0.2 > 30 + txtW ? w * 0.2 : 30 + txtW;
     const bx = x + (bw + (i ? 10 : 0)) * i;
     const xa = bx + btnH * 0.5;
     const ya = y + btnH * 0.5;
-
     btns[i] = [...e, bx, bw, btnH, y, xa, ya, true];
 
-    roundRect(c, bx, y, bw , btnH, btnH * 0.5, COLORS.AXIS, COLORS.WHITE);
-    drawTxt(c, e[1], bx + bw * 0.6, ya + btnH * 0.05, 'center', 'middle', fontHdr);
-    toggleBtnState(c, xa, ya, btnH, e, true);
+    if (init) {
+      flgs[e[0]] = true;
+    }
+
+    roundRect(c, bx, y, bw , btnH, btnH * 0.5, axClr(), bgClr());
+    drawTxt(c, e[1], bx + bw * 0.6, ya + btnH * 0.05, 'center', 'middle', txtClr(), fontHdr);
+    toggleBtnState(c, xa, ya, btnH, e, flgs[e[0]]);
   }
 
   function toggleBtnState(c, xa, ya, btnH, e, actv) {
-    drawArc(c, xa, ya, btnH * 0.3 , 0, 2 * Math.PI, COLORS.WHITE, e[2]);
+    drawArc(c, xa, ya, btnH * 0.3 , 0, 2 * Math.PI, bgClr(), e[2]);
     if (actv) {
-      drawTick(c, xa - 6, ya, 2, COLORS.WHITE);
+      drawTick(c, xa - 6, ya, 2, CLRS.WHITE);
     } else {
-      drawArc(c, xa, ya, btnH * 0.23 , 0, 2 * Math.PI, COLORS.WHITE, COLORS.WHITE);
+      drawArc(c, xa, ya, btnH * 0.19 , 0, 2 * Math.PI, bgClr(), bgClr());
     }
   }
 
@@ -424,8 +496,26 @@ function Chart(opt) {
     c.restore();
   }
 
+  function filterData(d, flgs) {
+    return keys(d).reduce((a, n) => {
+      const isA = d[n] instanceof Array ;
+      let temp = isA ? [] : {};
+      if (!isA) {
+        for (const k in d[n]) {
+          if (k.startsWith('x') || k in flgs && flgs[k]) {
+            temp[k] = d[n][k];
+          }
+        }
+      } else {
+        d[n].forEach(e => {
+          if (e[0].startsWith('x') || e[0] in flgs && flgs[e[0]]) temp.push(e);
+        })
+      }
+      return Object.assign({}, a, { [n]: temp })
+    }, {});
+  }
+
   function getMxLLn(c, n, y) {
-    // console.log('maxL', n, y);
     return Math.max(...[mesT(c, n), mesT(c, y)]);
   }
 
@@ -434,29 +524,21 @@ function Chart(opt) {
   }
 
   function mesT(c, v) {
-    // console.log(arguments);
     return c.measureText(v).width;
   }
 
-  function findBoxCoord(x, p, w, h) {
-    // to fix
-    // console.log('boxw', w);
+  function findBoxCoord(x, p, w) {
     const xr = x - 0.25 * w;
     const xl = x - 0.75 * w;
-    const mxx = p.w * 0.96;
     const mnx = p.w * 0.04;
-    // console.log({
-    //   x: x + w > p.w && x < mxx? xl : x > mxx ? x - w : x < mnx ? x : xr,
-    //   y: p.y
-    // })
+    console.log('coord', x + 0.25 * w, p.w, xl);
     return {
-      x: x + w > p.w && x < mxx? xl : x > mxx ? x - w : x < mnx ? x : xr,
+      x: (x + 0.75 * w) > p.w ? p.w - w : x - 0.25 * w < p.x ? p.x : xr,
       y: p.y
     };
   }
 
-  function roundRect(c, x, y, w, h, r, strSt, flSt) {
-    console.log('args', arguments);
+  function roundRect(c, x, y, w, h, r, strSt, flSt, isVal) {
     c.save();
     c.beginPath();
     c.moveTo(x + r, y);
@@ -471,11 +553,7 @@ function Chart(opt) {
     c.strokeStyle = strSt;
     c.closePath();
     c.stroke();
-    // c.translate(300,300);
-    // c.shadowColor = '#D5D5D5';
-    // c.shadowBlur = 15;
-    // c.globalAlpha = 0.8
-    // c.shadowOffsetY = 1;
+    isVal && (c.shadowColor = '#0a0a0a08') && (c.shadowBlur = 45);
     c.fillStyle = flSt;
     c.fill()
     c.restore();
@@ -483,13 +561,15 @@ function Chart(opt) {
 
   function drawMiniature(chart, c, w, h, p, xl, yl, per) {
     const { stX, stY } = getSteps(w, p.h * 0.85, xl, yl, per);
-    const colors = Object.values(chart.colors);
+    const colors = values(chart.colors);
     const cols = chart.columns;
 
     for (let i = cols.length - 1; i > 0; i--) {
       c.beginPath();
       for (let j = 1, x = p.x; j < cols[i].length; j++, x += stX) {
-        const y = (p.y + p.h) - cols[i][j] * stY;
+        // p.h + p.y - p.h * aCut[i][j] / ylc.max;
+        const y = (p.y + p.h) - p.h * cols[i][j] / (yl.max * 1.3);
+        
         if (j === 1) {
           c.moveTo(x, y);
         } else {
@@ -502,29 +582,17 @@ function Chart(opt) {
     }
   }
 
-  function drawChartCoordinates(c, p, clr, xlc, ylc) {
+  function drawChrtCrdnts(c, p, clr, xlc, ylc) {
     const y = p.y + p.h;
     c.beginPath();
     c.moveTo(p.x, y);
     c.lineTo(p.w, y);
     c.strokeStyle = clr;
-    c.lineWidth = p.clw;
+    c.lineWidth = 1;
     c.stroke();
-    c.closePath();
 
     dXC(c, p, xlc, getPeriodUTC(xlc));
     dYC(c, p, getYCPer(p, ylc));
-  }
-
-  function drawMinChartCoordinates(c, p, clr) {
-    const y = p.y + p.h;
-    c.beginPath();
-    c.moveTo(p.x, p.y);
-    c.lineTo(p.x, y);
-    c.lineTo(p.w, y);
-    c.strokeStyle = clr;
-    c.lineWidth = p.lw;
-    c.stroke();
   }
 
   function getPeriodUTC(xlc) {
@@ -532,7 +600,11 @@ function Chart(opt) {
   }
 
   function getYCPer(p, ylc) {
-    return (ylc.max - ylc.min) / p.h;
+    // console.log('ylc', ylc);
+
+
+    if (!ylc) return ;
+    return ylc.max / p.h;
   }
 
   function dXC(c, p, xlc, t) {
@@ -543,13 +615,14 @@ function Chart(opt) {
     const yshft = (p.y + p.h) * 0.05
 
     c.beginPath()
-    c.fillStyle = COLORS.FONT;
+    c.fillStyle = CLRS.FONT;
     c.font = font;
 
     for (let i = 0, x = p.x; i < POINTS; i++, x += st){
       const y = p.y + p.h;
       const xx = x + xshft;
       const txt = formatDate(getDate(xlc, t, tshft, i), { month: 'short', day: '2-digit' });
+      c.lineWidth = p.clw;
       c.moveTo(xx, y);
       c.fillText(txt, xx - xshft / 2, y + yshft);
     }
@@ -558,17 +631,19 @@ function Chart(opt) {
   }
 
   function dYC(c, p, t) {
-    const st = t * p.h / POINTS;
+    // console.log('t', t);
+    const st = t * p.h / POINTS * 1.3;
     const sty = p.h / POINTS;
+    // console.log('st', st);
 
     c.beginPath()
-    c.fillStyle = COLORS.FONT;
-    c.font = `12px ${FF}`;
+    c.fillStyle = CLRS.FONT;
+    c.font = font;
     
     for (let i = 0, y = p.y + p.h; i < POINTS; i++, y -= sty) {
       c.moveTo(p.x, y);
       c.lineTo(p.w, y);
-      c.fillText(i === 0 ? '0' : round(st * i), p.x, y - 5);
+      c.fillText(i === 0 ? '0' : t ? round(st * i) : '', p.x, y - 5);
     }
     c.lineWidth = p.clw;
     c.stroke();
@@ -587,30 +662,30 @@ function Chart(opt) {
     const dh = document.body.scrollHeight;
     c.style.margin = 'auto';
     c.style.display = 'block';
-    c.width = w || dw * 0.98;
-    c.height = h || dh * 0.98;
+    c.width = w || dw * 0.94;
+    c.height = h || dh;
     return { c, w: c.width, h: c.height };
   }
 
   function clearChart(c, x, y, w, h) {
-    console.log('clearing', arguments);
     c.clearRect(x, y, w, h);
   }
 
   function round(dgt) {
-    const l = ('' + dgt).length;
+    const l = dgt.toFixed(0).length;
     if (l === 1) {
       return dgt;
-    } else if (l === 2) {
-      return Math.round(dgt / 10) * 10; 
-    } else if (l === 3) {
+    } else if (l > 1 && l < 4) {
+      return Math.round(dgt / 10) * 10;
+    } else if (l > 3 && l < 6) {
       return Math.round(dgt / 100) * 100; 
     } else {
       return Math.round(dgt / 1000) * 1000;
     }
   }
 
-  function findMaxMin(array, actvz, isM) {
+  function fndMxMn(array, actvz, isM) {
+    if (!array) return ;
     if (isM && array[0].startsWith('x')) {
       actvz.length = array.length;
     }
@@ -625,7 +700,7 @@ function Chart(opt) {
     return { min, max };
   }
 
-  function mergeCols(columns) {
+  function mrgCls(columns) {
     return columns.reduce((acc, next) => 
       (next[0].startsWith('x') && Object.assign({}, acc, { x: [...(acc.x ? acc.x : []), ...next] })) ||
       (next[0].startsWith('y') && Object.assign({}, acc, { y: [...(acc.y ? acc.y : []), ...next] }))
@@ -635,7 +710,7 @@ function Chart(opt) {
   function getSteps(w, h, xl, yl, period) {
     return {
       stX: w / ((xl.max - xl.min) / period),
-      stY: h / (yl.max - yl.min)
+      stY: yl ? h / (yl.max - yl.min) : 0
     };
   }
 
