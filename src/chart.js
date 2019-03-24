@@ -24,8 +24,8 @@
     BOX_BRDR: '#ddeaf3',
     BOX: '#f5f9fb',
     WHITE: '#ffffff',
-    FONT: '#909090',
-    NFONT: '#ffffffb5',
+    FONT: '#909090ab',
+    NFONT: '#ffffff63',
     BLACK: '#000000',
     MODE: '#008cea',
     NIGHT: '#222f3f',
@@ -33,7 +33,7 @@
     NMBOX: '#1e2938',
     NLBL: '#0a0a0a66'
   };
-  const FF = opt.fontFamaly || 'Roboto';
+  const FF = opt.fontFamaly || 'Arial';
   const font = `${opt.fontSize || 9}pt ${FF}`;
   const fontlbl = `${opt.fontLblSize || 10}pt ${FF}`;
   const fontHdr = `${opt.fontHdrSize || 10}pt ${FF}`;
@@ -308,7 +308,7 @@
     const bh = p.boxH;
     const x = p.xBox;
     const y = p.yBox;
-    
+
     drawRect(c, x - 5, y - 1, bw + 10, bh + 2, clrs.BOX_BRDR, 0.6);
     drawRect(c, x, y, bw - 1, bh, bgClr());
     drawMiniature(data, c, w, h, p, xl, yl, PERIOD);
@@ -341,7 +341,7 @@
     const ylc  = fndMxMn(mCls.y, actvz);
     const { stX } = getSteps(p.w, p.h * 0.8, xlc, ylc, per);
 
-    const yc = p.y + p.h + (p.y + p.h) * 0.06
+    const yc = p.y + p.h + (p.y + p.h) * 0.1
     let fFlag = true;
     const vals = {};
     
@@ -418,14 +418,14 @@
     const { x, y } = findBoxCoord(curx, p, bw, lh);
 
     roundRect(c, x, y, bw, lh, 3, lblClr(), bgClr(), true);
-    drawTxt(c, t, x + bw/2, y + hfh, 'center', 'top', txtClr());
+    drawTxt(c, t, x + bw/2, y + hfh, 'center', 'top', txtClr(), fontHdr);
 
     lsA.reverse().forEach((e, i) => {
       const wPerE = bw / lsA.length;
       const xt = x + wPerE * (i + 1) - wPerE / 2;
       const yt = y + hfh * 2;
-      drawTxt(c, e[3], xt, yt + e[2] * 0.5, 'center', 'top', e[4]);
-      drawTxt(c, e[0], xt, yt + e[2], 'center', 'top', e[4]);
+      drawTxt(c, e[3], xt, yt + e[2] * 0.5, 'center', 'top', e[4], fontHdr);
+      drawTxt(c, e[0], xt, yt + e[2], 'center', 'top', e[4], fontHdr);
     });
     
   }
@@ -467,7 +467,6 @@
     roundRect(c, bx, y, bw , btnH, btnH * 0.5, axClr(), bgClr());
     drawTxt(c, e[1], bx + bw * 0.6, ya + btnH * 0.05, 'center', 'middle', txtClr(), fontHdr);
     toggleBtnState(c, xa, ya, btnH, e, flgs[e[0]], init, swM);
-    
   }
 
   function toggleBtnState(c, xa, ya, btnH, e, actv, init, swM) {
@@ -659,7 +658,9 @@
     for (let i = 0, y = p.y + p.h; i < POINTS; i++, y -= sty) {
       c.moveTo(p.x, y);
       c.lineTo(p.w, y);
+      c.font = font;
       c.fillText(i === 0 ? '0' : t ? round(st * i) : '', p.x, y - 5);
+      
     }
     c.lineWidth = p.clw;
     c.stroke();
