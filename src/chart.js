@@ -617,50 +617,23 @@ function Chart(opt) {
   }
 
   function dXC(c, p, xlc, t, d, indxs, shft) {
-    const ar = [];
-    const cut = d.slice(indxs.s, indxs.e);
-    const prX = p.w / cut.length;
-    const ldif = Math.round(p.w/ POINTS / prX);
-    // console.log('prX, ldif', prX, ldif);
-
     const st = p.w / POINTS;
-
-    for (let i = ldif; i < d.length; i += ldif) {
-      console.log('iii', i, d[i]);
-      ar.push(formatDate(new Date(d[i]), { month: 'short', day: '2-digit' }));
-    }
-    const ind = Math.round(indxs.s / ldif);
-    // console.log('ar', ar);
-    // console.log('cut.l', indxs.s / ldif);
-    // console.log('cut.l', ar[Math.round(indxs.s / ldif)]);
-
-    console.log('ar', ar);
-    // console.log('ldif', ldif);
-    // const fD = (x, prX, d) => {
-    //   // console.log('Math.round(x / prX) - 1', Math.round(x / prX));
-    //   const i = Math.round(x / prX);
-    //   console.log('iii', i);
-    //   return d[indxs.s + i];
-    // };
-    // console.log('actvz', indxs, shft);
-    // const fw = prX * d.length;
-    // const prFwX = p.w / d.length;
-    // console.log('fw', fw, prX, prFwX);
-    const yf = p.y + p.h;
-    const yshft = yf * 0.025
+    const stdiff = t / p.w;
+    const xshft = p.w * 0.06;
+    const tshft = stdiff * xshft;
+    const yshft = (p.y + p.h) * 0.05
 
     c.beginPath()
     c.fillStyle = CLRS.FONT;
     c.font = font;
 
-    for (let i = ar.length, x = p.w - 25 ; i--; x -= st){
-      // console.log('iii', i);
-      // console.log('ar[i]', ar[i]);
-      // console.log('fD', x, prX);
-      const y = yf + yshft;
-
-      c.moveTo(x + shft % (4 * st), y);
-      drawTxt(c, ar[i], x + shft % (4 * st), y, 'center', 'top', CLRS.FONT, font);
+    for (let i = 0, x = p.x; i < POINTS; i++, x += st){
+      const y = p.y + p.h;
+      const xx = x + xshft;
+      const txt = formatDate(getDate(xlc, t, tshft, i), { month: 'short', day: '2-digit' });
+      c.lineWidth = p.clw;
+      c.moveTo(xx, y);
+      drawTxt(c, txt, xx, y + yshft, 'center', 'middle', CLRS.FONT, font);
     }
     c.lineWidth = p.clw;
     c.stroke();
