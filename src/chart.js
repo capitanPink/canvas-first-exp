@@ -1,20 +1,21 @@
-// refactor miniature doesnt shows correctly with different diagrams + 
-// refactor if all lines disabled we have no NaNs on left grid + 
-// refactor if all diagrams turned off and switch to another mode and press main chart - bug + 
+// miniature doesnt shows correctly with different diagrams + 
+// if all lines disabled we have no NaNs on left grid + 
+// if all diagrams turned off and switch to another mode and press main chart - bug + 
 // change drawVal on touchMove +
+// fix moving square +-
 
-// need code refactor - 
+// code refactor - 
 // refactor getClr - shouldn't be execute at every places - 
-// refactor dates scrolling - 
-// refactor last date shouldn't change - 
-// refactor incorrect left amount with different diagrams - 
-// fix moving square - 
-// Add mouse events - 
+// to add:
+// dates scrolling -
+// chart animation
+// last date shouldn't change - 
+// incorrect left amount with different diagrams - 
+// mouse events - 
 
  function Chart(opt) {
   const _this = this;
   const { keys, values } = Object;
-  const RAF = window.requestAnimationFrame;
 
   const PERIOD = opt.period || 1000 * 60 * 60 * 24;
   const POINTS = opt.points || 6;
@@ -23,8 +24,8 @@
     BOX_BRDR: '#ddeaf3',
     BOX: '#f5f9fb',
     WHITE: '#ffffff',
-    FONT: '#999c9e',
-    LBL: '',
+    FONT: '#909090',
+    NFONT: '#ffffffb5',
     BLACK: '#000000',
     MODE: '#008cea',
     NIGHT: '#222f3f',
@@ -82,6 +83,7 @@
   const mBoxClr = () => (sWP.nMd ? CLRS.NMBOX : CLRS.BOX);
   const txtClr = () => (sWP.nMd ? CLRS.WHITE : CLRS.BLACK);
   const lblClr = () => (sWP.nMd ? CLRS.NLBL : CLRS.LBL);
+  const fntClr = () => (sWP.nMd ? CLRS.NFONT : CLRS.FONT);
 
   const flgs = {};
 
@@ -122,11 +124,9 @@
   }
 
   function drawMinChart(data, c, p, clrs, d = {}, m) {
-    RAF(() => {
-      clearChart(c, 0, p.y, p.w, p.h);
-      drawRect(c, 0, p.y, p.w, p.h + 1, bgClr());
-      drawMovingSquire(data, c, p, clrs, d, m);
-    });
+    clearChart(c, 0, p.y, p.w, p.h);
+    drawRect(c, 0, p.y, p.w, p.h + 1, bgClr());
+    drawMovingSquire(data, c, p, clrs, d, m);
   }
 
   function bindEvents(data, c, p, pMain, clrs) {
@@ -140,14 +140,14 @@
     this.isExp = false;
     this.isB2sm = false;
     this.isInMain = false;
+    this.drgbl = false;
 
     c.addEventListener('touchstart', handleTouchStart, false);
     c.addEventListener('touchend', handleTouchEnd, false);
     c.addEventListener('touchmove', throttle(handleTouchMove, 15), false);
 
-    // To add
-    // c.addEventListener('mouseover', handleTouchStart, false);
-    // c.addEventListener('mouseout', handleTouchEnd, false);
+    // c.addEventListener('mousedown', handleTouchStart, false);
+    // c.addEventListener('mouseup', handleTouchEnd, false);
     // c.addEventListener('mousemove', throttle(handleTouchMove, 15), false);
 
     function handleBtnsOnTouch(c, x, y) {
@@ -177,10 +177,10 @@
   
       if (self.isDL) {
         if (self.isB2sm) self.clxs = p.xBox;
-        else self.clxs = clientX;
+        else self.clxs = clientX < 0 ? p.xBox : clientX;
         self.isDL = null;
       } else if (self.isDR) {
-        if (!self.isB2sm) self.clxe = clientX;
+        if (!self.isB2sm) self.clxe = clientX > p.w ? p.xBox + p.boxW : clientX;
         else self.clxe = p.xBox + p.boxW;
         self.isDR = null;
       }
@@ -197,11 +197,14 @@
       isInMin = clientY > p.y && clientY < p.y + p.h;
       self.isDL = inClxs(clientX, getClxslim()) && isInMin;
       self.isDR = inClxe(clientX, getClxelim()) && isInMin;
-      self.Mvd = clientX > self.clxs && clientX < self.clxs + p.boxW && isInMin;
+      self.Mvd = clientX > self.clxs + w * 0.035
+        && clientX < self.clxs + p.boxW + w * 0.045
+        && isInMin;
 
       if (self.Mvd) {
         self.diffs.xl = clientX - self.clxs;
         self.diffs.xr = self.clxe - clientX;
+        self.drgbl = false;
       }
     }
 
@@ -219,19 +222,21 @@
       self.prev = clientX;
       self.isB2sm = p.boxW < p.w * 0.15;
 
-      const maxBoxW = p.w - 5;
-      const minBoxW = p.x + 5;
+      const maxBoxW = w - w * 0.015;
+      const minBoxW = w * 0.015;
       const isDrggbl = (self.isDL || self.isDR)
         && clientX < maxBoxW
         && clientX > minBoxW;
       const isMvbl = self.Mvd
-        && clientX > self.diffs.xl + 2
-        && clientX + self.diffs.xr < w - 2;
+        && clientX > self.diffs.xl + w * 0.005
+        && clientX + self.diffs.xr < w - w * 0.005
+        && !self.drgbl;
 
       if (showVal(clientX, clientY)) return;
 
       if (isDrggbl) {
-        
+        self.drgbl = true;
+
         if (self.isMvr) {
           if (!self.isMvr && self.isB2sm) {
             
@@ -250,11 +255,10 @@
           const d = { xl: self.isDL && clientX, xr: self.isDR && clientX };
           drawMinChart(filterData(_this.data, flgs), ctx, p, clrs, d);
         }
-        
-        
       } else if (isMvbl) {
         self.clxs = clientX - self.diffs.xl;
         self.clxe = clientX + self.diffs.xr;
+
         drawMinChart(filterData(_this.data, flgs), ctx, p, clrs, {}, self.clxs);
       }
     }
@@ -264,11 +268,11 @@
     }
 
     function getClxslim() {
-      return { d: this.clxs - 7, t: this.clxs + 15 };
+      return { d: this.clxs + w * 0.005, t: this.clxs + w * 0.045 };
     }
 
     function getClxelim() {
-      return { d: this.clxe + 5, t: this.clxe + 20 };
+      return { d: this.clxe + w * 0.025, t: this.clxe + w * 0.055 };
     }
 
     function inClxs(clx, clxslim) {
@@ -410,16 +414,16 @@
 
     const bw = cmnw > tw ? cmnw : tw;
     const hfh = parseInt(fontHdr);
-    const lh = hfh + parseInt(lsA.reduce((a, n) => a < n[2] ? n[2] : a, 0)) + 20;
+    const lh = hfh + parseInt(lsA.reduce((a, n) => a < n[2] ? n[2] : a, 0)) + 30;
     const { x, y } = findBoxCoord(curx, p, bw, lh);
 
     roundRect(c, x, y, bw, lh, 3, lblClr(), bgClr(), true);
-    drawTxt(c, t, x + bw/2, y + hfh * 0.5, 'center', 'top', txtClr());
+    drawTxt(c, t, x + bw/2, y + hfh, 'center', 'top', txtClr());
 
     lsA.reverse().forEach((e, i) => {
       const wPerE = bw / lsA.length;
       const xt = x + wPerE * (i + 1) - wPerE / 2;
-      const yt = y + hfh;
+      const yt = y + hfh * 2;
       drawTxt(c, e[3], xt, yt + e[2] * 0.5, 'center', 'top', e[4]);
       drawTxt(c, e[0], xt, yt + e[2], 'center', 'top', e[4]);
     });
@@ -628,7 +632,7 @@
     const yshft = (p.y + p.h) * 0.05
 
     c.beginPath()
-    c.fillStyle = CLRS.FONT;
+    c.fillStyle = fntClr();
     c.font = font;
 
     for (let i = 0, x = p.x; i < POINTS; i++, x += st){
@@ -637,7 +641,7 @@
       const txt = formatDate(getDate(xlc, t, tshft, i), { month: 'short', day: '2-digit' });
       c.lineWidth = p.clw;
       c.moveTo(xx, y);
-      drawTxt(c, txt, xx, y + yshft, 'center', 'middle', CLRS.FONT, font);
+      drawTxt(c, txt, xx, y + yshft, 'center', 'middle', fntClr(), font);
     }
     c.lineWidth = p.clw;
     c.stroke();
@@ -649,7 +653,7 @@
 
     c.save();
     c.beginPath()
-    c.fillStyle = CLRS.FONT;
+    c.fillStyle = fntClr();
     c.font = font;
     c.strokeStyle = clr;
     for (let i = 0, y = p.y + p.h; i < POINTS; i++, y -= sty) {
@@ -676,6 +680,7 @@
     c.style.display = 'block';
     c.width = w || dw * 0.94;
     c.height = h || window.innerHeight;
+    dw > 1024 && (document.getElementById('desktop__warning').style.display = 'block');
     return { c, w: c.width, h: c.height };
   }
 
