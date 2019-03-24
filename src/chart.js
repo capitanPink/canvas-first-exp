@@ -1,13 +1,17 @@
-// refactor getClr - shouldn't be execute at every places
-// refactor dates scrolling
-// refactor last date shouldn't change
-// refactor incorrect left amount with different diagrams
 // refactor miniature doesnt shows correctly with different diagrams + 
 // refactor if all lines disabled we have no NaNs on left grid + 
 // refactor if all diagrams turned off and switch to another mode and press main chart - bug + 
-// change drawVal on touchMove
-// fix moving square
-function Chart(opt) {
+// change drawVal on touchMove +
+
+// need code refactor - 
+// refactor getClr - shouldn't be execute at every places - 
+// refactor dates scrolling - 
+// refactor last date shouldn't change - 
+// refactor incorrect left amount with different diagrams - 
+// fix moving square - 
+// Add mouse events - 
+
+ function Chart(opt) {
   const _this = this;
   const { keys, values } = Object;
   const RAF = window.requestAnimationFrame;
@@ -339,7 +343,7 @@ function Chart(opt) {
     
     clearChart(c, p.x, 0, p.w, yc);
     drawRect(c, p.x, 0, p.w, yc + 2, bgClr());
-    drawChrtCrdnts(ctx, p, axClr(), xlc, ylc);
+    drawChrtCrdnts(c, p, axClr(), xlc, ylc, indxs, data.columns.find(e => e[0].startsWith('x')));
 
     for(let i = aCut.length - 1; i > 0; i--) {
       const clr = clrs[i - 1];
@@ -348,7 +352,6 @@ function Chart(opt) {
 
       c.beginPath();
       for (let j = 1, x = p.x; j < aCut[i].length; j++, x += stX) {
-        // console.log('(aCut[i][j] / ylc.max * 1.3)', (aCut[i][j] / (ylc.max * 1.3)));
         const y = p.h + p.y - (p.h / 1.3 * aCut[i][j] / ylc.max)
 
         if (val && x > val.clientX && fFlag) {
@@ -567,7 +570,6 @@ function Chart(opt) {
     for (let i = cols.length - 1; i > 0; i--) {
       c.beginPath();
       for (let j = 1, x = p.x; j < cols[i].length; j++, x += stX) {
-        // p.h + p.y - p.h * aCut[i][j] / ylc.max;
         const y = (p.y + p.h) - p.h * cols[i][j] / (yl.max * 1.3);
         
         if (j === 1) {
@@ -582,17 +584,10 @@ function Chart(opt) {
     }
   }
 
-  function drawChrtCrdnts(c, p, clr, xlc, ylc) {
-    const y = p.y + p.h;
-    c.beginPath();
-    c.moveTo(p.x, y);
-    c.lineTo(p.w, y);
-    c.strokeStyle = clr;
-    c.lineWidth = 1;
-    c.stroke();
+  function drawChrtCrdnts(c, p, clr, xlc, ylc, indxs, d) {
 
     dXC(c, p, xlc, getPeriodUTC(xlc));
-    dYC(c, p, getYCPer(p, ylc));
+    dYC(c, p, getYCPer(p, ylc), clr);
   }
 
   function getPeriodUTC(xlc) {
@@ -600,9 +595,6 @@ function Chart(opt) {
   }
 
   function getYCPer(p, ylc) {
-    // console.log('ylc', ylc);
-
-
     if (!ylc) return ;
     return ylc.max / p.h;
   }
@@ -625,6 +617,7 @@ function Chart(opt) {
       c.lineWidth = p.clw;
       c.moveTo(xx, y);
       c.fillText(txt, xx - xshft / 2, y + yshft);
+      drawTxt(c, txt, xx, y + yshft, 'center', 'middle', CLRS.FONT, font);
     }
     c.lineWidth = p.clw;
     c.stroke();
